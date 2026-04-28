@@ -8,74 +8,80 @@ const { buildSqlPrompt, buildHumanResponsePrompt } = require('./src/core/promptB
 const { initDB, executeQuery } = require('./src/db/connection');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// Render usa el puerto 10000 por defecto
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json());
 
-// --- 1. Inicializar Base de Datos ---
 initDB().then(() => {
     console.log("✅ Base de Datos de la Barbería lista.");
 });
 
-// --- 2. Configurar Servidor Express (Para que el hosting no se caiga) ---
 app.get('/', (req, res) => {
     res.send("🤖 BarberShop AI Assistant está corriendo en vivo.");
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor web activo en el puerto ${PORT}`);
+    console.log(`🚀 Servidor activo en el puerto ${PORT}`);
 });
 
-// --- 3. Configurar Bot de Telegram ---
 const token = process.env.TELEGRAM_TOKEN;
-
 if (!token) {
-    console.error("❌ ERROR: Falta el TELEGRAM_TOKEN en el archivo .env");
+    console.error("❌ ERROR: Falta el TELEGRAM_TOKEN");
     process.exit(1);
 }
 
-// Inicializamos el bot en modo "polling" (escucha constantemente)
 const bot = new TelegramBot(token, { polling: true });
-console.log("📲 Bot de Telegram escuchando mensajes...");
+console.log("📲 Bot de Telegram escuchando...");
 
-// Escuchar cualquier mensaje de texto
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const question = msg.text;
 
-    // Si el usuario recién entra al bot
     if (question === '/start') {
-        return bot.sendMessage(chatId, "💈 ¡Hola! Soy la IA de tu barbería. Pregúntame sobre ventas, turnos o barberos. Por ejemplo: '¿Cuánto facturó Marcos ayer?'");
+        return bot.sendMessage(chatId, "💈 ¡Hola! Soy el asistente de tu barbería. Pregúntame sobre ventas o barberos.");
     }
 
-    // Le damos feedback al usuario de que estamos pensando
-    bot.sendMessage(chatId, "⏳ Analizando tu consulta...");
+    bot.sendMessage(chatId, "⏳ Analizando...");
 
     try {
-        // Fase 1: SQL
+        // --- Fase 1: SQL ---
         const sqlPrompt = buildSqlPrompt(question);
         const resultSQL = await model.generateContent(sqlPrompt);
-        const sqlQuery = resultSQL.response.text().trim().replace(/```sql/g, '').replace(/```/g, '').trim();
+        const sqlResponse = resultSQL.response.text().trim();
 
-        // Fase 2: Ejecutar en SQLite
+        // Detectar si la pregunta está fuera de contexto
+        if (sqlResponse.includes("NO_DATA")) {
+            return bot.sendMessage(chatId, "🤔 No estoy seguro de cómo responder a eso. Por ahora solo puedo ayudarte con datos de la barbería (ventas, turnos, barberos).");
+        }
+
+        const sqlQuery = sqlResponse.replace(/```sql/g, '').replace(/```/g, '').trim();
+
+        // --- Fase 2: Ejecutar ---
         const data = await executeQuery(sqlQuery);
 
-        // Fase 3: Humanizar
+        // --- Fase 3: Humanizar ---
         const humanPrompt = buildHumanResponsePrompt(question, data);
         const resultHuman = await model.generateContent(humanPrompt);
         const answer = resultHuman.response.text().trim();
 
-        // Responder en Telegram
         bot.sendMessage(chatId, `🗣️ ${answer}`);
 
     } catch (error) {
-        console.error("Error en el bot:", error);
+        console.error("DEBUG ERROR:", error);
         
-        if (error.message.includes("429")) {
-            bot.sendMessage(chatId, "⚠️ Los servidores de IA están un poco saturados. Por favor, espera 30 segundos y vuelve a preguntar.");
-        } else {
-            bot.sendMessage(chatId, "❌ Lo siento, hubo un problema procesando tu consulta. Intenta con otra pregunta.");
+        // Error de cuota (Tokens agotados)
+        if (error.message.includes("429") || error.message.toLowerCase().includes("quota")) {
+            return bot.sendMessage(chatId, "🪫 He agotado mis créditos gratuitos de IA por ahora. Por favor, intenta de nuevo más tarde.");
+        } 
+        
+        // Error de base de datos (Pregunta válida pero SQL mal formado)
+        if (error.message.includes("SQLITE_ERROR")) {
+            return bot.sendMessage(chatId, "🔍 No pude encontrar información exacta para esa pregunta en mis registros.");
         }
+
+        // Error técnico general
+        bot.sendMessage(chatId, "❌ Lo siento, hubo un problema procesando tu consulta. Intenta reformular la pregunta.");
     }
 });
