@@ -4,6 +4,14 @@ const databaseSchema = {
   description: "Base de datos de una Barbería moderna",
   tables: [
     {
+      name: "usuarios",
+      columns: [
+        { name: "telegram_id", type: "TEXT PRIMARY KEY", description: "ID único de Telegram del usuario" },
+        { name: "nombre", type: "VARCHAR(50)", description: "Nombre del usuario en Telegram" },
+        { name: "rol", type: "VARCHAR(20)", description: "Rol del usuario: puede ser 'BARBERO' o 'CLIENTE'" }
+      ]
+    },
+    {
       name: "barberos",
       columns: [
         { name: "id", type: "INTEGER PRIMARY KEY" },
