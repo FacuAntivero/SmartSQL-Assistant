@@ -1,5 +1,6 @@
 // src/config/gemini.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const barberTools = require('../core/tools'); // <-- 1. Importamos las herramientas
 require('dotenv').config();
 
 if (!process.env.GEMINI_API_KEY) {
@@ -8,9 +9,10 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Cambiamos 'gemini-1.5-flash' por el clásico y confiable 'gemini-pro'
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-flash" 
+    model: "gemini-2.5-flash",
+    // 2. Le decimos a Gemini qué herramientas puede usar
+    tools: [{ functionDeclarations: barberTools.declarations }] 
 });
 
 module.exports = model;
