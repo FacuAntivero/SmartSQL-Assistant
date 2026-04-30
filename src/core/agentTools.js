@@ -72,15 +72,31 @@ const handleDisponibilidad = async (fecha, barbero_id) => {
 
 // 3. Agendar Turno (Escritura/Transaccional)
 const handleAgendarTurno = async (fecha, servicio_id, barbero_id) => {
-    // Insertamos el turno con propina inicial en 0
-    const query = `INSERT INTO turnos (barbero_id, servicio_id, fecha, propina) VALUES (${barbero_id}, ${servicio_id}, '${fecha}', 0)`;
     try {
-        await executeQuery(query);
+        // --- 1. VALIDACIÓN (Prevención de Double-Booking) ---
+        const checkQuery = `SELECT id FROM turnos WHERE fecha = '${fecha}' AND barbero_id = ${barbero_id}`;
+        const ocupados = await executeQuery(checkQuery);
+        
+        if (ocupados.length > 0) {
+            // Si el array tiene elementos, significa que ya hay un turno agendado
+            console.log(`⚠️ [Agente] Intento de solapamiento detectado para el barbero ${barbero_id} en la fecha ${fecha}`);
+            return { 
+                exito: false, 
+                instruccion_para_ia: "El barbero ya tiene un turno ocupado en esa fecha exacta. Dile al cliente que ese espacio no está disponible, discúlpate y ofrécele buscar otra fecha u otro barbero." 
+            };
+        }
+
+        // --- 2. INSERCIÓN (Si el espacio está libre) ---
+        const insertQuery = `INSERT INTO turnos (barbero_id, servicio_id, fecha, propina) VALUES (${barbero_id}, ${servicio_id}, '${fecha}', 0)`;
+        await executeQuery(insertQuery);
+        
         return { 
             exito: true, 
-            instruccion_para_ia: "El turno se guardó de forma exitosa en la base de datos. Comunícaselo al cliente de forma entusiasta y agradable." 
+            instruccion_para_ia: "El turno se guardó de forma exitosa en la base de datos. Comunícaselo al cliente de forma entusiasta y recuérdale la fecha." 
         };
+        
     } catch (error) {
+        console.error("❌ Error en handleAgendarTurno:", error);
         return { exito: false, error: "Error técnico al intentar guardar el turno en la base de datos." };
     }
 };
