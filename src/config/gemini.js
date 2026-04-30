@@ -10,8 +10,7 @@ if (!process.env.GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-flash",
-    // 2. Le decimos a Gemini qué herramientas puede usar
+model: "gemini-1.5-flash", 
     tools: [{ functionDeclarations: barberTools.declarations }] 
 });
 
