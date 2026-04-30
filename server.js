@@ -32,6 +32,9 @@ console.log("📲 Bot de Telegram escuchando...");
 const chatSessions = {}; 
 
 bot.on('message', async (msg) => {
+    // Si el mensaje viene de un botón (callback_query), ignoramos este bloque para no duplicar respuestas
+    if (!msg.text) return; 
+
     const chatId = msg.chat.id.toString();
     const question = msg.text;
     const userName = msg.from.first_name || 'Usuario';
@@ -51,19 +54,38 @@ bot.on('message', async (msg) => {
     // --- COMANDOS MÁGICOS ---
     if (question === '/soybarbero') {
         await executeQuery(`UPDATE usuarios SET rol = 'BARBERO' WHERE telegram_id = '${chatId}'`);
-        delete chatSessions[chatId]; // Borramos memoria para resetear contexto
-        return bot.sendMessage(chatId, "👨‍⚖️ Modo Administrador activado. Eres BARBERO.");
+        delete chatSessions[chatId]; 
+        return bot.sendMessage(chatId, "👨‍⚖️ Modo Administrador activado. Eres BARBERO. Escribe /start para ver tu nuevo menú.");
     }
 
     if (question === '/soycliente') {
         await executeQuery(`UPDATE usuarios SET rol = 'CLIENTE' WHERE telegram_id = '${chatId}'`);
-        delete chatSessions[chatId]; // Borramos memoria para resetear contexto
-        return bot.sendMessage(chatId, "💇‍♂️ Modo Cliente activado. Eres CLIENTE.");
+        delete chatSessions[chatId]; 
+        return bot.sendMessage(chatId, "💇‍♂️ Modo Cliente activado. Eres CLIENTE. Escribe /start para ver tu nuevo menú.");
     }
 
     if (question === '/start') {
-        delete chatSessions[chatId]; // Reiniciamos chat
-        return bot.sendMessage(chatId, `💈 ¡Hola, ${userName}! Soy el agente IA de la barbería.\n\nTu rol actual es: *${userRole}*.\n\n¿En qué te puedo ayudar hoy?`);
+        delete chatSessions[chatId]; 
+        
+        // INTERFAZ DINÁMICA (RBAC UI) - Esto suma muchos puntos en entrevistas
+        let botones = [];
+        
+        if (userRole === 'BARBERO') {
+            botones.push([{ text: "💰 Ver ganancias", callback_data: "accion_finanzas" }]);
+        } else {
+            botones.push([{ text: "📅 Agendar un turno", callback_data: "accion_agendar" }]);
+        }
+        botones.push([{ text: "🕒 Ver turnos ocupados", callback_data: "accion_ver_turnos" }]);
+
+        const opciones = {
+            reply_markup: { inline_keyboard: botones }
+        };
+
+        return bot.sendMessage(
+            chatId, 
+            `💈 ¡Hola, ${userName}! Soy el asistente IA de la barbería.\n\nTu rol actual es: *${userRole}*.\n\nPuedes escribirme o usar las opciones rápidas:`, 
+            opciones
+        );
     }
 
     bot.sendMessage(chatId, "⏳ Pensando...");
@@ -71,20 +93,14 @@ bot.on('message', async (msg) => {
     try {
         // --- 1. MEMORIA CONVERSACIONAL ---
         if (!chatSessions[chatId]) {
-            // Si el usuario no tiene una sesión activa, se la creamos
             const today = new Date().toISOString().split('T')[0];
             const systemPrompt = `
                 Eres el asistente cordial de una barbería. La fecha de hoy es ${today}. 
                 El usuario con el que hablas tiene el rol de: ${userRole}.
                 
                 CATÁLOGO DE LA BASE DE DATOS (Usa estrictamente estos IDs numéricos al usar herramientas):
-                Barberos:
-                - ID 1: Marcos
-                - ID 2: Julian
-                Servicios:
-                - ID 1: Corte Clásico
-                - ID 2: Corte y Barba
-                - ID 3: Coloración
+                Barberos: ID 1 (Marcos), ID 2 (Julian)
+                Servicios: ID 1 (Corte Clásico), ID 2 (Corte y Barba), ID 3 (Coloración)
 
                 Si el usuario quiere agendar un turno, pregúntale fecha, servicio y barbero ANTES de usar la herramienta de agendar.
             `;
@@ -100,23 +116,14 @@ bot.on('message', async (msg) => {
         const chat = chatSessions[chatId];
 
         // --- 2. EL BUCLE DEL AGENTE (FUNCTION CALLING) ---
-        
-        // Enviamos el mensaje del usuario a Gemini
         let result = await chat.sendMessage(question);
-        
-        // Verificamos si Gemini decidió usar una herramienta
-        if (result.response.functionCalls && result.response.functionCalls().length > 0) {
-            const call = result.response.functionCalls()[0];
-            
-            // Ejecutamos la herramienta en nuestro servidor
+        const llamadas = typeof result.response.functionCalls === 'function' ? result.response.functionCalls() : result.response.functionCalls;
+
+        if (llamadas && llamadas.length > 0) {
+            const call = llamadas[0];
             const toolResult = await executeTool(call.name, call.args, userRole);
-            
-            // Le devolvemos el resultado crudo a Gemini
             result = await chat.sendMessage([{
-                functionResponse: {
-                    name: call.name,
-                    response: toolResult
-                }
+                functionResponse: { name: call.name, response: toolResult }
             }]);
         }
 
@@ -127,5 +134,22 @@ bot.on('message', async (msg) => {
     } catch (error) {
         console.error("DEBUG ERROR:", error);
         bot.sendMessage(chatId, "❌ Lo siento, hubo un problema procesando tu consulta. ¿Puedes reformularla?");
+    }
+});
+
+// --- ESCUCHADOR DE EVENTOS: BOTONES DE TELEGRAM ---
+bot.on('callback_query', async (query) => {
+    const chatId = query.message.chat.id.toString();
+    const data = query.data; 
+    
+    bot.answerCallbackQuery(query.id); // Quita el icono de "cargando" del botón
+
+    // Redireccionamos la intención del botón hacia el flujo de la IA
+    if (data === 'accion_agendar') {
+        bot.sendMessage(chatId, "¡Excelente! Dime, ¿para qué fecha y con qué barbero te gustaría tu turno?");
+    } else if (data === 'accion_ver_turnos') {
+        bot.sendMessage(chatId, "Perfecto. ¿De qué fecha te gustaría consultar la disponibilidad?");
+    } else if (data === 'accion_finanzas') {
+        bot.sendMessage(chatId, "👨‍⚖️ Modo Admin: ¿De qué fecha o barbero quieres ver el reporte financiero?");
     }
 });
