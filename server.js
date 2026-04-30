@@ -74,9 +74,19 @@ bot.on('message', async (msg) => {
             // Si el usuario no tiene una sesión activa, se la creamos
             const today = new Date().toISOString().split('T')[0];
             const systemPrompt = `
-                Eres el asistente de una barbería. La fecha de hoy es ${today}. 
+                Eres el asistente cordial de una barbería. La fecha de hoy es ${today}. 
                 El usuario con el que hablas tiene el rol de: ${userRole}.
-                Si quiere agendar un turno, pregúntale fecha, servicio y barbero ANTES de usar la herramienta de agendar.
+                
+                CATÁLOGO DE LA BASE DE DATOS (Usa estrictamente estos IDs numéricos al usar herramientas):
+                Barberos:
+                - ID 1: Marcos
+                - ID 2: Julian
+                Servicios:
+                - ID 1: Corte Clásico
+                - ID 2: Corte y Barba
+                - ID 3: Coloración
+
+                Si el usuario quiere agendar un turno, pregúntale fecha, servicio y barbero ANTES de usar la herramienta de agendar.
             `;
             
             chatSessions[chatId] = model.startChat({
