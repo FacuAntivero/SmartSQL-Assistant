@@ -13,86 +13,96 @@ const executeTool = async (functionName, args, userRole) => {
         case 'consultar_disponibilidad':
             return await handleDisponibilidad(args.fecha, args.barbero_id);
         case 'agendar_turno':
-            return await handleAgendarTurno(args.fecha, args.servicio_id, args.barbero_id);
+            return await handleAgendarTurno(args.fecha, args.hora, args.servicio_id, args.barbero_id);
         default:
             return { error: `La herramienta ${functionName} no está programada en el sistema.` };
     }
 };
 
-// --- LÓGICA DE CADA HERRAMIENTA ---
-
-// 1. Información General (Nuestro antiguo Text-to-SQL, ahora encapsulado como una herramienta más)
+// 1. Información General (Text-to-SQL Mejorado y Blindado)
 const handleInformacionGeneral = async (pregunta, userRole) => {
     try {
-        const sqlPrompt = buildSqlPrompt(pregunta, userRole);
+        // Le pasamos la fecha actual para que la IA entienda cuándo es "hoy" o "este mes"
+        const fechaActual = new Date().toISOString().split('T')[0];
+        const sqlPrompt = buildSqlPrompt(pregunta, userRole, fechaActual);
+        
         const resultSQL = await model.generateContent(sqlPrompt);
         const sqlResponse = resultSQL.response.text().trim();
 
-        // Control de Seguridad (RBAC) inyectado directamente en la herramienta
-        if (sqlResponse.includes("NO_DATA")) {
-            return { error: "Pregunta fuera de contexto." };
-        }
-        if (sqlResponse.includes("ACCESO_DENEGADO")) {
-            return { error: "Acceso Denegado. El cliente intentó ver datos financieros confidenciales." };
-        }
+        if (sqlResponse.includes("NO_DATA")) return { error: "Pregunta fuera de contexto o no relacionada con la barbería." };
+        if (sqlResponse.includes("ACCESO_DENEGADO")) return { error: "Acceso Denegado. Como cliente no puedes ver esta información financiera." };
 
+        // Limpiamos la respuesta por si la IA le pone formato Markdown de código
         const sqlQuery = sqlResponse.replace(/```sql/g, '').replace(/```/g, '').trim();
-        console.log(`🔍 [SQL Generado]: ${sqlQuery}`);
+        console.log(`🔍 [SQL Generado Dinámicamente]: ${sqlQuery}`);
         
-        const data = await executeQuery(sqlQuery);
-        return { exito: true, datos_encontrados: data };
+        // Try-catch interno: Si la IA escribe mal el SQL, atrapamos el error aquí
+        try {
+            const data = await executeQuery(sqlQuery);
+            return { 
+                exito: true, 
+                instruccion_para_ia: "Aquí tienes los datos extraídos de la base de datos. Analízalos, suma o calcula lo que sea necesario, y respóndele al usuario de forma natural, resumida y conversacional.",
+                datos_encontrados: data 
+            };
+        } catch (dbError) {
+            console.error("❌ [Text-to-SQL Error DB]:", dbError.message);
+            return { 
+                exito: false, 
+                error: "El sistema intentó buscar los datos pero la consulta generada no fue compatible. Dile al usuario que hubo un error técnico al generar el reporte." 
+            };
+        }
     } catch (error) {
-        return { exito: false, error: "No se pudo consultar la base de datos para esta información." };
+        console.error("❌ [Text-to-SQL Error IA]:", error);
+        return { exito: false, error: "No se pudo interpretar la pregunta para convertirla en una consulta a la base de datos." };
     }
 };
 
-// 2. Consultar Disponibilidad de Turnos (Lectura)
+// 2. Consultar Disponibilidad de Turnos
 const handleDisponibilidad = async (fecha, barbero_id) => {
-    let query = `SELECT turnos.id, barberos.nombre as barbero, servicios.nombre as servicio, turnos.fecha
+    let query = `SELECT turnos.id, barberos.nombre as barbero, servicios.nombre as servicio, turnos.fecha, turnos.hora
                  FROM turnos
                  JOIN barberos ON turnos.barbero_id = barberos.id
                  JOIN servicios ON turnos.servicio_id = servicios.id
-                 WHERE turnos.fecha = '${fecha}'`;
-    
-    // Si el usuario especificó un barbero, filtramos la búsqueda
+                 WHERE turnos.fecha = $1`;
+    let params = [fecha];
+
     if (barbero_id) {
-        query += ` AND turnos.barbero_id = ${barbero_id}`;
+        query += ` AND turnos.barbero_id = $2`;
+        params.push(barbero_id);
     }
 
     try {
-        const ocupados = await executeQuery(query);
+        const ocupados = await executeQuery(query, params);
         return { 
-            instruccion_para_ia: `Hay ${ocupados.length} turnos registrados para estos criterios. Usa esta información para decirle al usuario qué horarios están ocupados.`,
+            instruccion_para_ia: `Hay ${ocupados.length} turnos registrados. Usa esta información para decirle al usuario qué HORARIOS están ocupados en esa fecha.`,
             turnos_ocupados: ocupados 
         };
     } catch (error) {
+        console.error("❌ Error en handleDisponibilidad:", error);
         return { error: "Error de base de datos al consultar la disponibilidad." };
     }
 };
 
-// 3. Agendar Turno (Escritura/Transaccional)
-const handleAgendarTurno = async (fecha, servicio_id, barbero_id) => {
+// 3. Agendar Turno
+const handleAgendarTurno = async (fecha, hora, servicio_id, barbero_id) => {
     try {
-        // --- 1. VALIDACIÓN (Prevención de Double-Booking) ---
-        const checkQuery = `SELECT id FROM turnos WHERE fecha = '${fecha}' AND barbero_id = ${barbero_id}`;
-        const ocupados = await executeQuery(checkQuery);
+        const checkQuery = `SELECT id FROM turnos WHERE fecha = $1 AND hora = $2 AND barbero_id = $3`;
+        const ocupados = await executeQuery(checkQuery, [fecha, hora, barbero_id]);
         
         if (ocupados.length > 0) {
-            // Si el array tiene elementos, significa que ya hay un turno agendado
-            console.log(`⚠️ [Agente] Intento de solapamiento detectado para el barbero ${barbero_id} en la fecha ${fecha}`);
+            console.log(`⚠️ [Agente] Solapamiento detectado: Barbero ${barbero_id} el ${fecha} a las ${hora}`);
             return { 
                 exito: false, 
-                instruccion_para_ia: "El barbero ya tiene un turno ocupado en esa fecha exacta. Dile al cliente que ese espacio no está disponible, discúlpate y ofrécele buscar otra fecha u otro barbero." 
+                instruccion_para_ia: `El turno de las ${hora} ya está ocupado. Discúlpate y ofrécele otro horario.` 
             };
         }
 
-        // --- 2. INSERCIÓN (Si el espacio está libre) ---
-        const insertQuery = `INSERT INTO turnos (barbero_id, servicio_id, fecha, propina) VALUES (${barbero_id}, ${servicio_id}, '${fecha}', 0)`;
-        await executeQuery(insertQuery);
+        const insertQuery = `INSERT INTO turnos (barbero_id, servicio_id, fecha, hora, propina) VALUES ($1, $2, $3, $4, 0)`;
+        await executeQuery(insertQuery, [barbero_id, servicio_id, fecha, hora]);
         
         return { 
             exito: true, 
-            instruccion_para_ia: "El turno se guardó de forma exitosa en la base de datos. Comunícaselo al cliente de forma entusiasta y recuérdale la fecha." 
+            instruccion_para_ia: `El turno se guardó exitosamente para el ${fecha} a las ${hora}. Confírmaselo al cliente de forma entusiasta.` 
         };
         
     } catch (error) {

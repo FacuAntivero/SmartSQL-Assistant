@@ -1,63 +1,49 @@
-# 💈 BarberShop AI Assistant (Text-to-SQL API)
+# 💈 SmartSQL Barber Assistant (Telegram AI Agent)
 
-Una API RESTful impulsada por IA que traduce preguntas en lenguaje natural a consultas SQL precisas, las ejecuta en una base de datos relacional y devuelve respuestas humanizadas. Construida con un patrón **RAG estructurado**.
+Un asistente virtual inteligente para Telegram que no solo chatea, sino que **actúa y analiza**. Impulsado por Google Gemini y PostgreSQL, combina la ejecución de herramientas (Function Calling) para agendar turnos y generación dinámica de Text-to-SQL para análisis financiero.
 
 ## 🚀 Características Principales
 
-- **Text-to-SQL Directo**: Convierte lenguaje natural complejo en sentencias de SQLite puro usando el modelo `gemini-2.5-flash`.
-- **Arquitectura de Doble Agente**: Un agente se encarga de la lógica de datos (SQL) y un segundo agente toma los datos crudos para generar una respuesta conversacional.
-- **Contexto Temporal Dinámico**: El sistema calcula y provee el contexto de tiempo ("hoy", "ayer") para consultas relativas.
-- **Trazabilidad Completa**: La API devuelve tanto la respuesta final como los metadatos de la consulta SQL ejecutada para su auditoría.
+- **Agendamiento Autónomo (Function Calling):** El bot entiende el lenguaje natural del cliente, verifica disponibilidad en tiempo real y guarda el turno en la base de datos previniendo solapamientos.
+- **Inteligencia Financiera (Text-to-SQL):** Los administradores pueden preguntar cosas como *"¿Cuánto facturó Marcos ayer?"*. La IA lee el esquema relacional, genera una consulta SQL pura con JOINs complejos, la ejecuta de forma segura y devuelve un resumen humano.
+- **Control de Acceso (RBAC):** Separación estricta entre CLIENTE y BARBERO. La IA denegará automáticamente cualquier consulta financiera si el usuario no tiene el rol adecuado.
+- **Contexto Temporal Dinámico:** El sistema inyecta la fecha actual del servidor en los prompts para que la IA entienda referencias relativas como "hoy", "ayer" o "este mes".
+- **Resiliencia Activa:** Fallbacks inteligentes implementados para manejar caídas de la API de IA o saturación de demanda sin dejar al usuario sin respuesta.
 
 ## 🛠️ Tecnologías Utilizadas
 
-- **Backend**: Node.js, Express
-- **Base de Datos**: SQLite3 (en memoria para el MVP)
-- **Inteligencia Artificial**: Google Generative AI (Gemini 2.5 Flash)
+- **Backend:** Node.js
+- **Base de Datos:** PostgreSQL Serverless (Neon.tech)
+- **Inteligencia Artificial:** Google Generative AI (Modelo gemini-2.5-flash-lite)
+- **Interfaz:** Telegram Bot API (node-telegram-bot-api)
 
-## 📦 Instalación y Uso
+## 📦 Instalación y Uso Local
 
-1. Clona el repositorio:
-   \`\`\`bash
-   git clone https://github.com/tu-usuario/barbershop-ai-api.git
-   \`\`\`
-2. Instala las dependencias:
-   \`\`\`bash
-   npm install
-   \`\`\`
-3. Configura tus variables de entorno creando un archivo \`.env\`:
-   \`\`\`text
-   GEMINI_API_KEY=tu_api_key_aqui
-   PORT=3000
-   \`\`\`
-4. Inicia el servidor:
-   \`\`\`bash
-   node server.js
-   \`\`\`
+1. Clonar el repositorio:
+    git clone https://github.com/tu-usuario/smartsql-assistant.git
 
-## 🧠 Ejemplo de Uso (Endpoint Principal)
+2. Instalar dependencias:
+    npm install
 
-**POST** \`/api/ask\`
+3. Configurar variables de entorno:
+   Crea un archivo .env en la raíz del proyecto con el siguiente contenido:
 
-*Cuerpo de la petición (JSON):*
-\`\`\`json
-{
-  "question": "¿Cuánto facturó Marcos ayer?"
-}
-\`\`\`
+    TELEGRAM_TOKEN=tu_token_de_botfather
+    GEMINI_API_KEY=tu_api_key_de_google_ai
+    DATABASE_URL=tu_url_de_conexion_de_neon_postgres
+    PORT=10000
 
-*Respuesta exitosa:*
-\`\`\`json
-{
-  "question": "¿Cuánto facturó Marcos ayer?",
-  "answer": "Marcos facturó un total de $37 ayer.",
-  "metadata": {
-    "sqlGenerated": "SELECT SUM(s.precio) FROM turnos t JOIN barberos b ON t.barbero_id = b.id JOIN servicios s ON t.servicio_id = s.id WHERE b.nombre = 'Marcos' AND t.fecha = '2026-04-26';",
-    "dbRawResult": [
-      {
-        "SUM(s.precio)": 37
-      }
-    ]
-  }
-}
-\`\`\`
+4. Iniciar el servidor:
+    node server.js
+
+## 🧠 Flujos de Ejemplo en Telegram
+
+### Modo Cliente (/soycliente)
+- **Usuario:** "Quiero un corte clásico mañana a las 15 con Julián."
+- **Bot:** (Internamente busca disponibilidad y ejecuta la herramienta) -> "¡Excelente, Facundo! Turno agendado para mañana a las 15:00 con Julián. ¡Te esperamos! 😎"
+
+### Modo Barbero/Admin (/soybarbero)
+- **Usuario:** "¿Cuánto facturó Julián en lo que va del mes?"
+- **Bot:** (Genera y ejecuta SQL) -> "Julián lleva facturados $2000 en lo que va de mayo. 💪"
+- **Usuario:** "¿Y Marcos?"
+- **Bot:** "Marcos aún no ha registrado facturación en este período. 😅"

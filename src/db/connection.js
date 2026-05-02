@@ -1,16 +1,14 @@
 // src/db/connection.js
 const { Pool } = require('pg');
 
-// Aquí pegas tu Connection String de Neon
 const connectionString = process.env.DATABASE_URL; 
 
 const pool = new Pool({
   connectionString: connectionString,
-  ssl: { rejectUnauthorized: false } // Requerido para Neon
+  ssl: { rejectUnauthorized: false } 
 });
 
 const initDB = async () => {
-    // Creamos las tablas en PostgreSQL (la sintaxis cambia ligeramente de SQLite)
     const query = `
         CREATE TABLE IF NOT EXISTS usuarios (
             telegram_id TEXT PRIMARY KEY,
@@ -34,6 +32,7 @@ const initDB = async () => {
             barbero_id INTEGER,
             servicio_id INTEGER,
             fecha TEXT,
+            hora TEXT,
             propina REAL DEFAULT 0,
             FOREIGN KEY (barbero_id) REFERENCES barberos(id),
             FOREIGN KEY (servicio_id) REFERENCES servicios(id)
@@ -43,7 +42,15 @@ const initDB = async () => {
     try {
         await pool.query(query);
         
-        // Insertamos datos iniciales solo si la tabla está vacía
+        // --- SCRIPT DE MIGRACIÓN PARA AGREGAR LA COLUMNA FALTANTE ---
+        try {
+            await pool.query('ALTER TABLE turnos ADD COLUMN IF NOT EXISTS hora TEXT;');
+            console.log("✅ Migración exitosa: Columna 'hora' verificada en la base de datos.");
+        } catch (alterError) {
+            console.log("⚠️ Nota: La columna hora ya estaba procesada o hubo un tema menor:", alterError.message);
+        }
+        // -------------------------------------------------------------
+
         const res = await pool.query('SELECT COUNT(*) FROM barberos');
         if (parseInt(res.rows[0].count) === 0) {
             await pool.query("INSERT INTO barberos (nombre) VALUES ('Marcos'), ('Julian')");
@@ -55,9 +62,10 @@ const initDB = async () => {
     }
 };
 
-const executeQuery = async (text, params) => {
+// Adaptamos executeQuery para aceptar un array de parámetros
+const executeQuery = async (text, params = []) => {
     const res = await pool.query(text, params);
-    return res.rows; // PostgreSQL devuelve los resultados en .rows
+    return res.rows; 
 };
 
 module.exports = { initDB, executeQuery };

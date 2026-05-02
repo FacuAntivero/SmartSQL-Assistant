@@ -1,7 +1,6 @@
 // src/core/tools.js
 
 const barberTools = {
-    // Declaración de las herramientas para que Gemini las entienda
     declarations: [
         {
             name: "consultar_informacion_general",
@@ -37,13 +36,17 @@ const barberTools = {
         },
         {
             name: "agendar_turno",
-            description: "Usa esta herramienta ÚNICAMENTE cuando el cliente ya confirmó la fecha, el servicio y el barbero que desea.",
+            description: "Usa esta herramienta ÚNICAMENTE cuando el cliente ya confirmó la fecha, la HORA exacta, el servicio y el barbero.",
             parameters: {
                 type: "OBJECT",
                 properties: {
                     fecha: {
                         type: "STRING",
                         description: "Fecha del turno en formato YYYY-MM-DD."
+                    },
+                    hora: {
+                        type: "STRING",
+                        description: "Hora del turno en formato HH:MM (Ej: 17:00). SI EL USUARIO NO LA DIO, PÍDELA ANTES DE USAR LA HERRAMIENTA."
                     },
                     servicio_id: {
                         type: "INTEGER",
@@ -54,7 +57,8 @@ const barberTools = {
                         description: "ID del barbero que eligió el cliente."
                     }
                 },
-                required: ["fecha", "servicio_id", "barbero_id"]
+                // Ahora la IA sabe que está OBLIGADA a tener la hora antes de guardar
+                required: ["fecha", "hora", "servicio_id", "barbero_id"] 
             }
         }
     ]
