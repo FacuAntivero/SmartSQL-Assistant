@@ -1,5 +1,3 @@
-// src/core/tools.js
-
 const barberTools = {
     declarations: [
         {
@@ -57,8 +55,7 @@ const barberTools = {
                         description: "ID del barbero que eligió el cliente."
                     }
                 },
-                // Ahora la IA sabe que está OBLIGADA a tener la hora antes de guardar
-                required: ["fecha", "hora", "servicio_id", "barbero_id"] 
+                 required: ["fecha", "hora", "servicio_id", "barbero_id"] 
             }
         }
     ]

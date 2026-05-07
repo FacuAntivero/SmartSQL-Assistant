@@ -1,5 +1,3 @@
-// src/db/schema.js
-
 const databaseSchema = {
   description: "Base de datos de una Barbería moderna",
   tables: [

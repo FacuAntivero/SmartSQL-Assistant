@@ -1,4 +1,3 @@
-// src/core/agentTools.js
 const { executeQuery } = require('../db/connection');
 const model = require('../config/gemini');
 const { buildSqlPrompt } = require('./promptBuilder');

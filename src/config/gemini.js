@@ -1,4 +1,3 @@
-// src/config/gemini.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const barberTools = require('../core/tools'); // <-- 1. Importamos las herramientas
 require('dotenv').config();

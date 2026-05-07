@@ -1,4 +1,3 @@
-// src/core/promptBuilder.js
 const schema = require('../db/schema');
 
 // Recibimos referenceDate (fechaActual) desde agentTools

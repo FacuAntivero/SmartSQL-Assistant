@@ -1,4 +1,3 @@
-// src/db/connection.js
 const { Pool } = require('pg');
 
 const connectionString = process.env.DATABASE_URL; 
@@ -42,11 +41,9 @@ const initDB = async () => {
     try {
         await pool.query(query);
         
-        // --- SCRIPT DE MIGRACIÓN PARA AGREGAR LA COLUMNA FALTANTE ---
-        try {
+         try {
             await pool.query('ALTER TABLE turnos ADD COLUMN IF NOT EXISTS hora TEXT;');
-            console.log("✅ Migración exitosa: Columna 'hora' verificada en la base de datos.");
-        } catch (alterError) {
+         } catch (alterError) {
             console.log("⚠️ Nota: La columna hora ya estaba procesada o hubo un tema menor:", alterError.message);
         }
         // -------------------------------------------------------------
@@ -62,8 +59,7 @@ const initDB = async () => {
     }
 };
 
-// Adaptamos executeQuery para aceptar un array de parámetros
-const executeQuery = async (text, params = []) => {
+ const executeQuery = async (text, params = []) => {
     const res = await pool.query(text, params);
     return res.rows; 
 };
